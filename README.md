@@ -1,13 +1,9 @@
 # Replication of FELM
 
- FELM is a meta benchmark to *evaluate factuality evaluation* for large language models.
- The benchmark comprises 847 questions that span five distinct domains: world knowledge, science/technology, writing/recommendation, reasoning, and math. We gather prompts corresponding to each domain by various sources including standard datasets like truthfulQA, online platforms like Github repositories, ChatGPT generation or drafted by authors.
+FELM is a meta-benchmark designed to assess the accuracy of factual evaluations in large language models. It includes 847 questions across five key domains: world knowledge, science/technology, writing/recommendation, reasoning, and math. These questions are sourced from a variety of places, including established datasets like TruthfulQA, online platforms such as GitHub repositories, ChatGPT-generated prompts, and drafts provided by the authors.
 
- We then obtain responses from ChatGPT for these prompts. For each response, we employ fine-grained annotation at the segment level, which includes reference links, identified error types, and the reasons behind these errors as provided by our annotators.
+## Download dataset
 
-## Download
-
-- Download the whole dataset by:
   ```
   wget https://huggingface.co/datasets/hkust-nlp/felm/resolve/main/all.jsonl
   ```
@@ -47,7 +43,7 @@ Negative segments |785 | 147  | 148 | 122 | 101 | 267
 | ref | list      |  reference links       |
 
 
-#### Typical Data Point
+#### A Data Point
 
 
 ```
@@ -62,7 +58,7 @@ Negative segments |785 | 147  | 148 | 122 | 101 | 267
  "ref": ["https://www.eia.gov/tools/faqs/faq.php?id=207&t=3"]}
 
 ```
-#### Evaluation on FELM
+#### Environment
 
 System Requirements  
 - **Python Version:** Python 3.10  
@@ -77,7 +73,9 @@ Install the required dependencies:
 pip install -r requirements.txt 
 ```
 
-To reproduce our results:
+#### Evaluation on FELM
+
+To reproduce the results:
 ```
 cd eval
 #put "all.jsonl" here (Downloaded by Method 1)
@@ -101,7 +99,6 @@ The FELM dataset is licensed under a
 
 ## Citation
 
-Please cite our paper if you use our dataset:
 ```bibtex
 @inproceedings{
 chen2023felm,
