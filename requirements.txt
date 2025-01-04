@@ -1,0 +1,17 @@
+transformers==4.32.0
+openai==0.27.8
+tenacity==8.2.2
+tokenizer==3.4.2
+pandas==2.0.3
+numpy==1.26.4
+sentencepiece
+google
+protobuf
+safetensors
+torch
+torchaudio
+torchvision
+accelerate
+huggingface_hub[cli]
+datasets
+html_to_json

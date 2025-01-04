@@ -17,19 +17,23 @@ import pandas as pd
 import regex as re
 import json
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from datasets import load_dataset
+import torch
+from accelerate import Accelerator
+
 
 @retry(wait=wait_random_exponential(min=8, max=50), stop=stop_after_attempt(6))
 def gene(eval_prompt,dataname,model,method):
     
-    if model=='vicuna_30B':
-       
-
+    if model=='vicuna_30B' or model=='vicuna_7B':
         eval_prompt+="\nBelow are your outputs:"
         eval_prompt+="\nAnswers:"
-        input_ids = tokenizer(eval_prompt, return_tensors="pt").input_ids.to("cuda")
+        input_ids = tokenizer(eval_prompt, return_tensors="pt").input_ids #.to("cuda")
+        input_ids = accelerator.prepare(input_ids)
         outputs = model_.generate(input_ids,max_new_tokens=100)
         
         return (tokenizer.decode(outputs[0])[len(eval_prompt)+4:],eval_prompt)
+
     elif model=="gpt-3.5-turbo" or model=="gpt-4":
         prefix=[{"role":"system","content":"You are a helpful assistant."}]
         prefix+= [{"role":"user","content": eval_prompt}]
@@ -98,6 +102,12 @@ def make_print_to_file(path='logger/'):
 
 def run(ori_data,model,method,num_cons):
     result={}
+
+    result_file = f"results_{model}_{method}.json"
+
+    if not os.path.exists(result_file):
+        with open(result_file, "w") as outfile:
+            json.dump([], outfile)  
     
     for json_str in ori_data:
         data = json.loads(json_str)
@@ -150,7 +160,6 @@ def run(ori_data,model,method,num_cons):
         
         eval_prompt+="\nQuestion: "
         eval_prompt+=prompt
-        # eval_prompt+="\n\nAnswer: "
         eval_prompt+="\nSegments: "
         for j in range(len(sumsentence)):
             no_number = extract_letters(sumsentence[j])
@@ -175,7 +184,6 @@ def run(ori_data,model,method,num_cons):
             raw_generate,prefix=gene(eval_prompt,dataset,model,method)
         
         if method=='cot_cons':
-            print(_id,raw_generates,label)
             ress=[]
             for i in range(len(raw_generates)):
                 generate=raw_generates[i]
@@ -189,16 +197,16 @@ def run(ori_data,model,method,num_cons):
                 res=[]
                 for i in range(len(sumsentence)):
                     if (gen[i]==1) and label[i]:
-                        print("TP")
+                        # print("TP")
                         res.append('TP')
                     elif (gen[i]==0) and not label[i]:
-                        print("TN")
+                        # print("TN")
                         res.append('TN')
                     elif (gen[i]==1) and not label[i]:
-                        print("FP")
+                        # print("FP")
                         res.append('FP')
                     elif (gen[i]==0) and label[i]:
-                        print('FN')
+                        # print('FN')
                         res.append('FN')
                 ress.append(res)
             final_res=[[] for _ in range(len(sumsentence))]
@@ -211,13 +219,10 @@ def run(ori_data,model,method,num_cons):
         
         else:
             
-            print(_id,raw_generate,label)
             generate=raw_generate
             gen=[1 for x in range(len(sumsentence))]
-            if model=='vicuna_30B':
-                # if 'ALL_CORRECT' not in generate:
+            if model=='vicuna_30B' or model=='vicuna_7B':
                 if 'ALL\_CORRECT' not in generate:
-                    # generate=''.join(re.findall(r'(?<=Answer: )[\s\S]*',generate))
                     generate=[int(x) for x in re.findall(r'\d+',generate) if int(x)<=len(sumsentence)]
                     gen=[1 for x in range(len(sumsentence))]
                     for _ in generate:
@@ -232,19 +237,20 @@ def run(ori_data,model,method,num_cons):
             res=[]
             for i in range(len(sumsentence)):
                 if (gen[i]==1) and label[i]:
-                    print("TP")
                     res.append('TP')
                 elif (gen[i]==0) and not label[i]:
-                    print("TN")
                     res.append('TN')
                 elif (gen[i]==1) and not label[i]:
-                    print("FP")
                     res.append('FP')
                 elif (gen[i]==0) and label[i]:
-                    print('FN')
                     res.append('FN')
-        # pdb.set_trace()
+
         result[_id] = {'id':_id,'domain':dataset,'pred': gen, 'raw': raw_generate, 'prompt': prefix,'res':res}
+        with open(result_file, "r+") as outfile:
+            existing_data = json.load(outfile)  # Load current data
+            existing_data.append(result[_id])   # Append new result
+            outfile.seek(0)                     # Go to the beginning of the file
+            json.dump(existing_data, outfile, indent=4)  # Write
     return result
 
 def compute_accuracy(domain, res):
@@ -289,6 +295,8 @@ def save_exp(ori_data,result, output):
         id_, dataset,qst, ans, label = str(data['index']), data['domain'],data['prompt'], data['response'],data['labels']
         tp,comment,ref=str(data['type']),str(data['comment']), str(data['ref'])
         # pdb.set_trace()
+        if id_ not in result:
+            continue
         prompt = str(result[id_]['prompt'])
         gen = result[id_]['raw']
         res = result[id_]['res']
@@ -329,18 +337,26 @@ if __name__ =='__main__':
 
     args=parse_args()
     if args.model=='vicuna_30B':
-        tokenizer = AutoTokenizer.from_pretrained("lmsys/vicuna-33b-v1.3")
-        model_ = AutoModelForCausalLM.from_pretrained("lmsys/vicuna-33b-v1.3",device_map="auto")
+        tokenizer = AutoTokenizer.from_pretrained("lmsys/vicuna-33b-v1.3") 
+        # model_ = AutoModelForCausalLM.from_pretrained("lmsys/vicuna-13b-v1.3",device_map="auto", offload_folder='offload')
+        accelerator = Accelerator()
+        model_ = AutoModelForCausalLM.from_pretrained("lmsys/vicuna-33b-v1.3", device_map="auto", offload_folder='offload')
+        model_ = accelerator.prepare(model_)
+    elif args.model=='vicuna_7B':
+        tokenizer = AutoTokenizer.from_pretrained("lmsys/vicuna-7b-v1.3") 
+        accelerator = Accelerator()
+        model_ = AutoModelForCausalLM.from_pretrained("lmsys/vicuna-7b-v1.3", device_map="auto", offload_folder='offload')
+        model_ = accelerator.prepare(model_)
     openai.api_key=args.key
     res=set()
     path=args.path
 
     with open(path, 'r') as json_file:
-        data = list(json_file)
-
-    result=run(data,args.model,args.method,args.num_cons)
-    print_saveresult(data,result,args.method,args.model)
-
-
-
+        data = list(json_file) 
     
+    result=run(data,args.model,args.method,args.num_cons)
+
+    # with open('results_vicuna_30B_raw.json', 'r') as file:
+    #     data_list = json.load(file) 
+    # result = {entry['id']: entry for entry in data_list}
+    print_saveresult(data,result,args.method,args.model)
